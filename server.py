@@ -1,7 +1,9 @@
 from flask import Flask, request
+from flask_cors import CORS
 import os
 
 app = Flask(__name__)
+CORS(app)  # 👈 DAS FIXT CORS
 
 UPLOAD_FOLDER = "uploads"
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
@@ -16,10 +18,6 @@ def upload():
         return "Keine Datei", 400
 
     file = request.files["file"]
-
-    if file.filename == "":
-        return "Keine Datei ausgewählt", 400
-
     file.save(os.path.join(UPLOAD_FOLDER, file.filename))
     return "Upload erfolgreich"
 
