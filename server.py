@@ -37,11 +37,12 @@ def list_files():
     files = supabase.storage.from_(BUCKET).list()
     return jsonify([f["name"] for f in files])
 
+from flask import redirect
 
 @app.route("/files/<filename>")
 def download(filename):
     url = supabase.storage.from_(BUCKET).get_public_url(filename)
-    return url
+    return redirect(url)
 
 
 if __name__ == "__main__":
