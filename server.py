@@ -1,37 +1,48 @@
-from flask import Flask, request, send_from_directory, jsonify
+from flask import Flask, request, jsonify
 from flask_cors import CORS
+from supabase import create_client
 import os
 
 app = Flask(__name__)
 CORS(app)
 
-UPLOAD_FOLDER = "uploads"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+supabase = create_client(
+    os.environ.get("SUPABASE_URL"),
+    os.environ.get("SUPABASE_KEY")
+)
+
+BUCKET = "files"
 
 @app.route("/")
 def home():
     return "Backend läuft"
 
-# 📤 Upload
 @app.route("/upload", methods=["POST"])
 def upload():
     if "file" not in request.files:
         return "Keine Datei", 400
 
     file = request.files["file"]
-    file.save(os.path.join(UPLOAD_FOLDER, file.filename))
+
+    supabase.storage.from_(BUCKET).upload(
+        file.filename,
+        file.read()
+    )
+
     return "Upload erfolgreich"
 
-# 📁 Datei Liste
-@app.route("/files", methods=["GET"])
-def list_files():
-    files = os.listdir(UPLOAD_FOLDER)
-    return jsonify(files)
 
-# 📥 Download
+@app.route("/files")
+def list_files():
+    files = supabase.storage.from_(BUCKET).list()
+    return jsonify([f["name"] for f in files])
+
+
 @app.route("/files/<filename>")
-def download_file(filename):
-    return send_from_directory(UPLOAD_FOLDER, filename)
+def download(filename):
+    url = supabase.storage.from_(BUCKET).get_public_url(filename)
+    return url
+
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 10000))
