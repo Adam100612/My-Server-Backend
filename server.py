@@ -1,12 +1,28 @@
-from flask import Flask
+from flask import Flask, request
+import os
 
 app = Flask(__name__)
+
+UPLOAD_FOLDER = "uploads"
+os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.route("/")
 def home():
     return "Backend läuft"
 
+@app.route("/upload", methods=["POST"])
+def upload():
+    if "file" not in request.files:
+        return "Keine Datei", 400
+
+    file = request.files["file"]
+
+    if file.filename == "":
+        return "Keine Datei ausgewählt", 400
+
+    file.save(os.path.join(UPLOAD_FOLDER, file.filename))
+    return "Upload erfolgreich"
+
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port)
