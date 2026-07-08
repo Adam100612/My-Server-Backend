@@ -35,7 +35,6 @@ def upload():
 
     file = request.files["file"]
 
-
     content_type = file.content_type or "application/octet-stream"
 
 
@@ -49,7 +48,6 @@ def upload():
             }
         )
 
-
         return "Upload erfolgreich"
 
 
@@ -60,8 +58,7 @@ def upload():
 
 
 
-
-# Dateien laden
+# Dateien anzeigen
 @app.route("/files")
 def list_files():
 
@@ -81,7 +78,6 @@ def list_files():
 
 
 
-
 # Download
 @app.route("/files/<filename>")
 def download(filename):
@@ -93,61 +89,47 @@ def download(filename):
 
 
 
-
 # Umbenennen
 @app.route("/rename", methods=["POST"])
 def rename():
 
     data = request.json
 
-
     old_name = data.get("oldName")
     new_name = data.get("newName")
 
 
     if not old_name or not new_name:
-
         return "Name fehlt",400
-
 
 
     try:
 
-        # Datei holen
         file_data = supabase.storage.from_(BUCKET).download(old_name)
 
 
-
-        # neuen Dateityp erkennen
         content_type = mimetypes.guess_type(new_name)[0]
 
-
         if not content_type:
-
             content_type = "application/octet-stream"
 
 
 
-        # neue Datei speichern
         supabase.storage.from_(BUCKET).upload(
             new_name,
             file_data,
             {
-                "content-type": content_type
+                "content-type":content_type
             }
         )
 
 
-
-        # alte Datei löschen
         supabase.storage.from_(BUCKET).remove(
             [old_name]
         )
 
 
-
         return "Umbenannt"
-
 
 
     except Exception as e:
@@ -155,6 +137,34 @@ def rename():
         return str(e),500
 
 
+
+
+# Löschen
+@app.route("/delete", methods=["POST"])
+def delete():
+
+    data = request.json
+
+    filename = data.get("filename")
+
+
+    if not filename:
+        return "Dateiname fehlt",400
+
+
+    try:
+
+        supabase.storage.from_(BUCKET).remove(
+            [filename]
+        )
+
+
+        return "Gelöscht"
+
+
+    except Exception as e:
+
+        return str(e),500
 
 
 
