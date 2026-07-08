@@ -93,10 +93,12 @@ def rename():
         file_data = supabase.storage.from_(BUCKET).download(old_name)
 
 
-        # neue Datei erstellen
         supabase.storage.from_(BUCKET).upload(
-            new_name,
-            file_data
+    new_name,
+    file_data,
+    {
+        "content-type": "image/jpeg"
+    }
         )
 
 
