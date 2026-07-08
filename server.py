@@ -2,6 +2,7 @@ from flask import Flask, request, jsonify, redirect
 from flask_cors import CORS
 from supabase import create_client
 import os
+import mimetypes
 
 
 app = Flask(__name__)
@@ -35,26 +36,48 @@ def upload():
     file = request.files["file"]
 
 
-    supabase.storage.from_(BUCKET).upload(
-        file.filename,
-        file.read()
-    )
+    content_type = file.content_type or "application/octet-stream"
 
 
-    return "Upload erfolgreich"
+    try:
+
+        supabase.storage.from_(BUCKET).upload(
+            file.filename,
+            file.read(),
+            {
+                "content-type": content_type
+            }
+        )
+
+
+        return "Upload erfolgreich"
+
+
+    except Exception as e:
+
+        return str(e), 500
 
 
 
 
-# Dateien anzeigen
+
+# Dateien laden
 @app.route("/files")
 def list_files():
 
-    files = supabase.storage.from_(BUCKET).list()
+    try:
 
-    return jsonify(
-        [f["name"] for f in files]
-    )
+        files = supabase.storage.from_(BUCKET).list()
+
+        return jsonify(
+            [f["name"] for f in files]
+        )
+
+
+    except Exception as e:
+
+        return jsonify({"error":str(e)}),500
+
 
 
 
@@ -71,7 +94,7 @@ def download(filename):
 
 
 
-# Datei umbenennen
+# Umbenennen
 @app.route("/rename", methods=["POST"])
 def rename():
 
@@ -83,37 +106,54 @@ def rename():
 
 
     if not old_name or not new_name:
-        return "Name fehlt", 400
+
+        return "Name fehlt",400
 
 
 
     try:
 
-        # Datei herunterladen
+        # Datei holen
         file_data = supabase.storage.from_(BUCKET).download(old_name)
 
 
+
+        # neuen Dateityp erkennen
+        content_type = mimetypes.guess_type(new_name)[0]
+
+
+        if not content_type:
+
+            content_type = "application/octet-stream"
+
+
+
+        # neue Datei speichern
         supabase.storage.from_(BUCKET).upload(
-    new_name,
-    file_data,
-    {
-        "content-type": "image/jpeg"
-    }
+            new_name,
+            file_data,
+            {
+                "content-type": content_type
+            }
         )
 
 
-        # alte Datei entfernen
+
+        # alte Datei löschen
         supabase.storage.from_(BUCKET).remove(
             [old_name]
         )
 
 
+
         return "Umbenannt"
+
 
 
     except Exception as e:
 
-        return str(e), 500
+        return str(e),500
+
 
 
 
@@ -121,7 +161,7 @@ def rename():
 
 if __name__ == "__main__":
 
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT",10000))
 
     app.run(
         host="0.0.0.0",
