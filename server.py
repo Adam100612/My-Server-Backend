@@ -68,6 +68,7 @@ def upload():
 
 
     uid = get_user()
+    print("USER:", uid)
 
 
     if not uid:
