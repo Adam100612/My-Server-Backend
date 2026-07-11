@@ -1,12 +1,18 @@
 from flask import Flask, request, jsonify, redirect
 from flask_cors import CORS
 from supabase import create_client
+import firebase_admin
+from firebase_admin import credentials, auth
 import os
 import mimetypes
 
 
 app = Flask(__name__)
 CORS(app)
+
+
+cred = credentials.Certificate("firebase-key.json")
+firebase_admin.initialize_app(cred)
 
 
 supabase = create_client(
@@ -19,56 +25,130 @@ BUCKET = "files"
 
 
 
+def get_user():
+
+    header = request.headers.get("Authorization")
+
+    if not header:
+        return None
+
+
+    token = header.replace("Bearer ", "")
+
+
+    try:
+
+        decoded = auth.verify_id_token(token)
+
+        return decoded["uid"]
+
+    except Exception:
+
+        return None
+
+
+
+
+
+
 @app.route("/")
 def home():
+
     return "Backend läuft"
 
 
 
+
+
+
 # Upload
+
 @app.route("/upload", methods=["POST"])
 def upload():
 
+
+    uid = get_user()
+
+
+    if not uid:
+        return "Nicht angemeldet",401
+
+
+
     if "file" not in request.files:
-        return "Keine Datei", 400
+        return "Keine Datei",400
+
 
 
     file = request.files["file"]
 
-    content_type = file.content_type or "application/octet-stream"
+
+    path = uid + "/" + file.filename
 
 
     try:
 
         supabase.storage.from_(BUCKET).upload(
-            file.filename,
+
+            path,
+
             file.read(),
+
             {
-                "content-type": content_type
+                "content-type":
+                file.content_type or "application/octet-stream"
             }
+
         )
+
 
         return "Upload erfolgreich"
 
 
+
     except Exception as e:
 
-        return str(e), 500
+        return str(e),500
+
+
+
 
 
 
 
 # Dateien anzeigen
+
 @app.route("/files")
 def list_files():
 
+
+    uid = get_user()
+
+
+    if not uid:
+        return jsonify([]),401
+
+
+
     try:
 
-        files = supabase.storage.from_(BUCKET).list()
+
+        files = supabase.storage.from_(BUCKET).list(uid)
+
+
 
         return jsonify(
-            [f["name"] for f in files]
+
+            [
+
+                f["name"]
+
+                for f in files
+
+            ]
+
         )
+
 
 
     except Exception as e:
@@ -78,60 +158,103 @@ def list_files():
 
 
 
+
+
+
 # Download
+
 @app.route("/files/<filename>")
 def download(filename):
 
-    url = supabase.storage.from_(BUCKET).get_public_url(filename)
+
+    uid = get_user()
+
+
+    if not uid:
+        return "Nicht angemeldet",401
+
+
+
+    path = uid + "/" + filename
+
+
+
+    url = supabase.storage.from_(BUCKET).get_public_url(path)
+
+
 
     return redirect(url)
 
 
 
 
+
+
+
+
 # Umbenennen
+
 @app.route("/rename", methods=["POST"])
 def rename():
 
+
+    uid = get_user()
+
+
+    if not uid:
+        return "Nicht angemeldet",401
+
+
+
     data = request.json
 
+
     old_name = data.get("oldName")
+
     new_name = data.get("newName")
 
 
-    if not old_name or not new_name:
-        return "Name fehlt",400
+
+    old_path = uid + "/" + old_name
+
+    new_path = uid + "/" + new_name
+
 
 
     try:
 
-        file_data = supabase.storage.from_(BUCKET).download(old_name)
 
-
-        content_type = mimetypes.guess_type(new_name)[0]
-
-        if not content_type:
-            content_type = "application/octet-stream"
+        content = supabase.storage.from_(BUCKET).download(old_path)
 
 
 
         supabase.storage.from_(BUCKET).upload(
-            new_name,
-            file_data,
+
+            new_path,
+
+            content,
+
             {
-                "content-type":content_type
+                "content-type":
+                mimetypes.guess_type(new_name)[0]
+                or "application/octet-stream"
             }
+
         )
 
 
+
         supabase.storage.from_(BUCKET).remove(
-            [old_name]
+
+            [old_path]
+
         )
 
 
         return "Umbenannt"
 
 
+
     except Exception as e:
 
         return str(e),500
@@ -139,27 +262,48 @@ def rename():
 
 
 
+
+
+
 # Löschen
+
 @app.route("/delete", methods=["POST"])
 def delete():
 
-    data = request.json
 
-    filename = data.get("filename")
+    uid = get_user()
+
+
+    if not uid:
+        return "Nicht angemeldet",401
+
+
+
+    filename = request.json.get("filename")
+
 
 
     if not filename:
         return "Dateiname fehlt",400
 
 
+
+    path = uid + "/" + filename
+
+
+
     try:
 
+
         supabase.storage.from_(BUCKET).remove(
-            [filename]
+
+            [path]
+
         )
 
 
         return "Gelöscht"
+
 
 
     except Exception as e:
@@ -169,11 +313,18 @@ def delete():
 
 
 
+
+
 if __name__ == "__main__":
+
 
     port = int(os.environ.get("PORT",10000))
 
+
     app.run(
+
         host="0.0.0.0",
+
         port=port
+
     )
